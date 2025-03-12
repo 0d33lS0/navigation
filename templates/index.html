@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indoor Navigation</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="static/style.css"> <!-- Link to external CSS file -->
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <h2>ค้นหาห้อง</h2>
+            <form action="/navigate" method="post">
+                <input type="text" id="room" name="room" placeholder="กรอกชื่อห้อง" autocomplete="off">
+                <div id="suggestions" class="suggestions"></div>
+                <button type="submit">นำทาง</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $("#room").on("input", function() {
+                var query = $(this).val();
+                if (query.length < 1) {
+                    $("#suggestions").empty();
+                    return;
+                }
+                $.get("/search_rooms", { q: query }, function(data) {
+                    $("#suggestions").empty();
+                    data.forEach(function(room) {
+                        $("#suggestions").append(`<div class="suggestion-item" title="${room}">${room}</div>`);
+                    });
+                });
+            });
+
+            $(document).on("click", ".suggestion-item", function() {
+                $("#room").val($(this).text());
+                $("#suggestions").empty();
+            });
+
+            $(document).click(function(event) {
+                if (!$(event.target).closest("#room, #suggestions").length) {
+                    $("#suggestions").empty();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>นำทาง</title>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="static/style.css"> <!-- Link to external CSS file -->
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- ขั้นตอนการเดินทาง -->
+    <div id="steps-container">
+        <button id="toggle-steps-btn">ขั้นตอนการเดินทางไปยังห้อง {{ room }}</button>
+        <div id="steps" style="display: none;">
+            <h2>ขั้นตอนการเดินทาง:</h2>
+            <ul>
+                {% for step in steps %}
+                <li>{{ step }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- ปุ่มค้นหา -->
+    <div id="search-container">
+        <button id="search-btn">ค้นหาห้องใหม่</button>
+        <div id="search-box" style="display: none;">
+            <input type="text" id="room-search-navigate" placeholder="ค้นหาห้องใหม่..." autocomplete="off">
+            <div id="suggestions-navigate" class="suggestions-navigate"></div>
+            <button id="search-action-btn">ค้นหา</button>
+        </div>
+    </div>    
+
+    <script>
+        var destination = ["{{ lat }}", "{{ lng }}"];
+        var map = L.map('map').setView(destination,16);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        L.marker(destination).addTo(map).bindPopup("จุดหมายปลายทางของคุณ").openPopup();
+
+        var userMarker = null;
+        var routeLine = null;
+
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition(function(position) {
+                var userLocation = [position.coords.latitude, position.coords.longitude];
+                
+                if (userMarker) {
+                    userMarker.setLatLng(userLocation);
+                } else {
+                    userMarker = L.circleMarker(userLocation, {
+                        color: 'white',
+                        fillColor: 'blue',
+                        fillOpacity: 0.8,
+                        radius: 8
+                    }).addTo(map).bindPopup("ตำแหน่งของคุณ").openPopup();
+                }
+
+                var osrmRouteUrl = `https://router.project-osrm.org/route/v1/driving/${userLocation[1]},${userLocation[0]};${destination[1]},${destination[0]}?overview=full&geometries=geojson`;
+                fetch(osrmRouteUrl)
+                    .then(response => response.json())
+                    .then(data => {
+                        var routeCoordinates = data.routes[0].geometry.coordinates;
+                        var latlngs = routeCoordinates.map(coord => [coord[1], coord[0]]);
+                        
+                        if (routeLine) {
+                            map.removeLayer(routeLine);
+                        }
+                        routeLine = L.polyline(latlngs, { color: 'blue' }).addTo(map);
+                    })
+                    .catch(error => console.error("Error fetching route:", error));
+            });
+        }
+
+        $(document).ready(function() {
+            $("#room-search-navigate").on("input", function() {
+                var query = $(this).val();
+                if (query.length < 1) {
+                    $("#suggestions-navigate").empty();
+                    return;
+                }
+                $.get("/search_rooms", { q: query }, function(data) {
+                    $("#suggestions-navigate").empty();
+                    data.forEach(function(room) {
+                        $("#suggestions-navigate").append(`<div class="suggestion-item">${room}</div>`);
+                    });
+                });
+            });
+
+            $(document).on("click", ".suggestion-item", function() {
+                $("#room-search-navigate").val($(this).text());
+                $("#suggestions-navigate").empty();
+            });
+
+            $(document).click(function(event) {
+                if (!$(event.target).closest("#room-search-navigate, #suggestions-navigate").length) {
+                    $("#suggestions-navigate").empty();
+                }
+            });
+        });
+
+        // เปิด/ปิดขั้นตอนการเดินทาง
+        $("#toggle-steps-btn").click(function() {
+            $("#steps").toggle();
+        });
+
+        // เปิด/ปิดช่องค้นหา
+        $("#search-btn").click(function() {
+            $("#search-box").toggle();
+        });
+
+        // ค้นหาห้อง
+        $("#search-action-btn").click(function() {
+            var newRoom = $("#room-search-navigate").val();
+            if (newRoom) {
+                window.location.href = `/navigate?room=${encodeURIComponent(newRoom)}`;
+            }
+        });
+    </script>
+</body>
+</html>
